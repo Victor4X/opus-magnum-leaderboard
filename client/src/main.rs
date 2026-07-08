@@ -116,7 +116,7 @@ impl App {
                     Ok(r) => LogEntry {
                         time,
                         puzzle_id: r.puzzle_id,
-                        status: "OK".into(),
+                        status: if r.accepted { "OK".into() } else { "no improvement".into() },
                         cost: r.cost,
                         cycles: r.cycles,
                         area: r.area,
@@ -307,6 +307,11 @@ impl eframe::App for App {
                                     ui.label(entry.cycles.map_or("—".into(), |v| v.to_string()));
                                     ui.label(entry.area.map_or("—".into(), |v| v.to_string()));
                                     ui.label(entry.instructions.map_or("—".into(), |v| v.to_string()));
+                                } else if entry.status == "no improvement" {
+                                    ui.label(entry.cost.map_or("—".into(), |v| v.to_string()));
+                                    ui.label(entry.cycles.map_or("—".into(), |v| v.to_string()));
+                                    ui.label(entry.area.map_or("—".into(), |v| v.to_string()));
+                                    ui.colored_label(egui::Color32::GRAY, "no improvement");
                                 } else {
                                     ui.label("—");
                                     ui.label("—");

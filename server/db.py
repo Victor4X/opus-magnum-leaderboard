@@ -40,6 +40,16 @@ def init_db():
         """)
 
 
+def get_player_best(puzzle_id: str, nickname: str) -> dict | None:
+    """Return the current per-metric best for this player+puzzle, or None if no prior submission."""
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT cost, cycles, area, instructions FROM best_scores WHERE puzzle_id = ? AND nickname = ?",
+            (puzzle_id, nickname),
+        ).fetchone()
+    return dict(row) if row else None
+
+
 def insert_submission(puzzle_id: str, nickname: str, cost, cycles, area, instructions, blob: bytes):
     with get_conn() as conn:
         conn.execute(

@@ -2,7 +2,7 @@ import os
 from fastapi import FastAPI, File, Form, UploadFile, HTTPException
 from fastapi.responses import HTMLResponse
 
-from db import init_db, insert_submission, get_leaderboard, get_puzzle_leaderboard
+from db import init_db, insert_submission, get_player_best, get_leaderboard, get_puzzle_leaderboard
 from parser import extract_puzzle_id, extract_puzzle_name
 from scorer import score_solution
 
@@ -55,6 +55,20 @@ async def submit(file: UploadFile = File(...), nickname: str = Form(...)):
     except RuntimeError as e:
         raise HTTPException(422, str(e))
 
+    cost, cycles, area = scores["cost"], scores["cycles"], scores["area"]
+    score = (cost + cycles + area) if None not in (cost, cycles, area) else None
+    puzzle_name = _puzzle_names.get(puzzle_id, puzzle_id)
+    base = {"puzzle_id": puzzle_id, "puzzle_name": puzzle_name, **scores, "score": score}
+
+    # Reject only if strictly dominated: new score is >= existing best in every metric
+    METRICS = ("cost", "cycles", "area", "instructions")
+    existing = get_player_best(puzzle_id, nickname)
+    if existing and all(
+        scores[m] is not None and existing[m] is not None and scores[m] >= existing[m]
+        for m in METRICS
+    ):
+        return {**base, "accepted": False}
+
     insert_submission(
         puzzle_id,
         nickname,
@@ -64,11 +78,7 @@ async def submit(file: UploadFile = File(...), nickname: str = Form(...)):
         scores["instructions"],
         data,
     )
-
-    cost, cycles, area = scores["cost"], scores["cycles"], scores["area"]
-    score = (cost + cycles + area) if None not in (cost, cycles, area) else None
-    puzzle_name = _puzzle_names.get(puzzle_id, puzzle_id)
-    return {"puzzle_id": puzzle_id, "puzzle_name": puzzle_name, **scores, "score": score}
+    return {**base, "accepted": True}
 
 
 @app.get("/api/leaderboard")

@@ -3,6 +3,7 @@ use std::path::PathBuf;
 #[derive(Debug, Clone)]
 pub struct UploadResult {
     pub puzzle_id: String,
+    pub accepted: bool,
     pub cost: Option<i64>,
     pub cycles: Option<i64>,
     pub area: Option<i64>,
@@ -36,6 +37,7 @@ pub async fn upload(server_url: &str, nickname: &str, path: &PathBuf) -> anyhow:
     let json: serde_json::Value = resp.json().await?;
     Ok(UploadResult {
         puzzle_id: json["puzzle_id"].as_str().unwrap_or("?").to_string(),
+        accepted: json["accepted"].as_bool().unwrap_or(true),
         cost: json["cost"].as_i64(),
         cycles: json["cycles"].as_i64(),
         area: json["area"].as_i64(),
