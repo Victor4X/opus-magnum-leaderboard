@@ -9,11 +9,15 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
 
+// Score is the headline metric, matching the web leaderboard's gold styling.
+const GOLD: egui::Color32 = egui::Color32::from_rgb(0xc9, 0xa8, 0x4c);
+
 #[derive(Clone)]
 struct LogEntry {
     time: String,
     puzzle_id: String,
     status: String,
+    score: Option<i64>,
     cost: Option<i64>,
     cycles: Option<i64>,
     area: Option<i64>,
@@ -118,6 +122,7 @@ impl App {
                         time,
                         puzzle_id: r.puzzle_id,
                         status: if r.accepted { "OK".into() } else { "no improvement".into() },
+                        score: r.score,
                         cost: r.cost,
                         cycles: r.cycles,
                         area: r.area,
@@ -127,6 +132,7 @@ impl App {
                         time,
                         puzzle_id,
                         status: format!("ERR: {}", e),
+                        score: None,
                         cost: None,
                         cycles: None,
                         area: None,
@@ -299,12 +305,13 @@ impl eframe::App for App {
                     ui.colored_label(egui::Color32::GRAY, "No uploads yet — modify a .solution file to trigger upload");
                 } else {
                     egui::Grid::new("log_grid")
-                        .num_columns(7)
+                        .num_columns(8)
                         .spacing([12.0, 4.0])
                         .striped(true)
                         .show(ui, |ui| {
                             ui.strong("Time");
                             ui.strong("Puzzle");
+                            ui.label(egui::RichText::new("Score").strong().color(GOLD));
                             ui.strong("Cost");
                             ui.strong("Cycles");
                             ui.strong("Area");
@@ -316,11 +323,14 @@ impl eframe::App for App {
                                 ui.label(&entry.time);
                                 ui.label(&entry.puzzle_id);
                                 if entry.status == "OK" || entry.status == "no improvement" {
+                                    let score = entry.score.map_or("—".into(), |v| v.to_string());
+                                    ui.label(egui::RichText::new(score).strong().size(15.0).color(GOLD));
                                     ui.label(entry.cost.map_or("—".into(), |v| v.to_string()));
                                     ui.label(entry.cycles.map_or("—".into(), |v| v.to_string()));
                                     ui.label(entry.area.map_or("—".into(), |v| v.to_string()));
                                     ui.label(entry.instructions.map_or("—".into(), |v| v.to_string()));
                                 } else {
+                                    ui.label("—");
                                     ui.label("—");
                                     ui.label("—");
                                     ui.label("—");
