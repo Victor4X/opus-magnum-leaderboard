@@ -13,6 +13,10 @@ fi
 
 mkdir -p "$DATA_DIR"
 
+# Remove any container left over from a previous run so the --name is free
+# (docker run would otherwise fail with "name is already in use").
+docker rm -f om-leaderboard >/dev/null 2>&1 || true
+
 docker run -d \
   --name om-leaderboard \
   -p 8000:8000 \
