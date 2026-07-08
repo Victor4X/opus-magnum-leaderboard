@@ -57,12 +57,12 @@ async function load() {
     // Group by puzzle_id
     const byPuzzle = {};
     for (const r of rows) {
-      if (!byPuzzle[r.puzzle_id]) byPuzzle[r.puzzle_id] = [];
-      byPuzzle[r.puzzle_id].push(r);
+      if (!byPuzzle[r.puzzle_id]) byPuzzle[r.puzzle_id] = { name: r.puzzle_name || r.puzzle_id, rows: [] };
+      byPuzzle[r.puzzle_id].rows.push(r);
     }
     allData = Object.entries(byPuzzle)
       .sort(([a], [b]) => a.localeCompare(b))
-      .map(([puzzle_id, rows]) => ({ puzzle_id, rows }));
+      .map(([puzzle_id, { name, rows }]) => ({ puzzle_id, name, rows }));
 
     document.getElementById('loading').style.display = 'none';
     renderAll();
@@ -79,7 +79,7 @@ function fmt(v) {
   return v;
 }
 
-function renderPuzzle({ puzzle_id, rows }, sortCol = 'cost', sortAsc = true) {
+function renderPuzzle({ puzzle_id, name, rows }, sortCol = 'cost', sortAsc = true) {
   const sorted = [...rows];
   sorted.sort((a, b) => {
     const av = a[sortCol], bv = b[sortCol];
@@ -118,7 +118,7 @@ function renderPuzzle({ puzzle_id, rows }, sortCol = 'cost', sortAsc = true) {
 
   return `<div class="puzzle-section" id="puzzle-${puzzle_id}">
     <div class="puzzle-title">
-      <span>${puzzle_id}</span>
+      <span>${name} <span class="puzzle-id">${puzzle_id}</span></span>
       <span class="puzzle-id">${sorted.length} player${sorted.length !== 1 ? 's' : ''}</span>
     </div>
     <table>
@@ -141,7 +141,7 @@ function renderAll(filter = '') {
   const noResults = document.getElementById('no-results');
   const lower = filter.toLowerCase();
   const visible = filter
-    ? allData.filter(d => d.puzzle_id.toLowerCase().includes(lower))
+    ? allData.filter(d => d.puzzle_id.toLowerCase().includes(lower) || d.name.toLowerCase().includes(lower))
     : allData;
 
   if (visible.length === 0 && allData.length > 0) {
