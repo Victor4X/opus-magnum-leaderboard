@@ -3,6 +3,9 @@ name: Build client
 on:
   push:
     branches: [main]
+    paths:
+      - 'client/**'
+      - '.github/workflows/build-client.yml'
   workflow_dispatch:
 
 permissions:
