@@ -43,12 +43,21 @@
   .standings-title .hint { font-size: 0.72rem; color: #888; font-weight: normal; }
   #standings table { width: 100%; border-collapse: collapse; }
   #standings th { background: #0d2137; padding: 0.4rem 0.75rem; text-align: right; font-size: 0.72rem;
-                  color: #888; text-transform: uppercase; letter-spacing: 1px; }
+                  color: #888; text-transform: uppercase; letter-spacing: 1px; cursor: pointer; user-select: none; }
+  #standings th:hover { color: #c9a84c; }
   #standings th.player-col, #standings th.rank { text-align: left; }
+  #standings th.rank { cursor: default; }
+  #standings th.rank:hover { color: #888; }
   #standings td { padding: 0.45rem 0.75rem; font-size: 0.9rem; border-top: 1px solid #1e2a3a; text-align: right; }
   #standings td.rank, #standings td.player-col { text-align: left; }
   #standings tr:hover td { background: #1e2a3a; }
-  .gold-total { color: #ffd700; font-weight: bold; }
+  /* Score is the headline metric — brightest and boldest */
+  #standings th.score-col { color: #ffd700; font-size: 0.8rem; }
+  #standings th.score-col:hover { color: #ffe873; }
+  #standings td.score-col { color: #ffd700; font-weight: bold; font-size: 1.05rem; background: rgba(255,215,0,0.06); }
+  #standings tr:hover td.score-col { background: rgba(255,215,0,0.12); }
+  /* Total is a secondary vanity tally */
+  .gold-total { color: #c9a84c; font-weight: bold; }
   .gold-zero { color: #555; }
   #loading { text-align: center; color: #888; padding: 3rem; font-size: 1.2rem; }
   #error { text-align: center; color: #e57373; padding: 3rem; }
@@ -132,9 +141,16 @@ function renderStandings() {
     }
   }
 
+  const { col, asc } = standingsSort;
   const standings = Object.entries(counts)
     .map(([nickname, c]) => ({ nickname, ...c }))
-    .sort((a, b) => b.total - a.total || a.nickname.localeCompare(b.nickname));
+    .sort((a, b) => {
+      let d = col === 'nickname' ? a.nickname.localeCompare(b.nickname) : a[col] - b[col];
+      d = asc ? d : -d;
+      if (d !== 0) return d;
+      // Stable tiebreak regardless of direction: more golds, then name.
+      return b.total - a.total || a.nickname.localeCompare(b.nickname);
+    });
 
   const el = document.getElementById('standings');
   if (standings.length === 0) { el.innerHTML = ''; return; }
@@ -143,14 +159,15 @@ function renderStandings() {
   const body = standings.map((s, i) => `<tr>
     <td class="rank">${i + 1}</td>
     <td class="player-col">${esc(s.nickname)}</td>
-    <td class="gold-total">${s.total}</td>
-    <td>${cell(s.score)}</td>
+    <td class="score-col">${cell(s.score)}</td>
     <td>${cell(s.cost)}</td>
     <td>${cell(s.cycles)}</td>
     <td>${cell(s.area)}</td>
     <td>${cell(s.instructions)}</td>
+    <td class="gold-total">${s.total}</td>
   </tr>`).join('');
 
+  const cls = c => col === c ? (asc ? 'sorted-asc' : 'sorted-desc') : '';
   el.innerHTML = `<div class="standings-box">
     <div class="standings-title">
       <span>&#9733; Player Standings</span>
@@ -159,17 +176,27 @@ function renderStandings() {
     <table>
       <thead><tr>
         <th class="rank">#</th>
-        <th class="player-col">Player</th>
-        <th>Total</th>
-        <th>Score</th>
-        <th>Cost</th>
-        <th>Cycles</th>
-        <th>Area</th>
-        <th>Instructions</th>
+        <th class="player-col ${cls('nickname')}" onclick="sortStandings('nickname')">Player</th>
+        <th class="score-col ${cls('score')}" onclick="sortStandings('score')">Score</th>
+        <th class="${cls('cost')}" onclick="sortStandings('cost')">Cost</th>
+        <th class="${cls('cycles')}" onclick="sortStandings('cycles')">Cycles</th>
+        <th class="${cls('area')}" onclick="sortStandings('area')">Area</th>
+        <th class="${cls('instructions')}" onclick="sortStandings('instructions')">Instructions</th>
+        <th class="${cls('total')}" onclick="sortStandings('total')">Total</th>
       </tr></thead>
       <tbody>${body}</tbody>
     </table>
   </div>`;
+}
+
+// Default: Score golds, most first. Clicking a numeric column starts descending
+// (more golds = higher); the player column starts ascending (A–Z).
+let standingsSort = { col: 'score', asc: false };
+function sortStandings(col) {
+  standingsSort = standingsSort.col === col
+    ? { col, asc: !standingsSort.asc }
+    : { col, asc: col === 'nickname' };
+  renderStandings();
 }
 
 function renderPuzzle({ puzzle_id, name, rows }) {
