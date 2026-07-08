@@ -29,8 +29,11 @@ def init_db():
             );
 
             -- Pareto-optimal submissions per player per puzzle.
-            -- A row is included unless some other submission from the same player
-            -- is better-or-equal in every metric and strictly better in at least one.
+            -- A row is excluded when another submission from the same player is
+            -- better-or-equal in every metric and either strictly better in at
+            -- least one (dominated) or identical but earlier (a duplicate, e.g.
+            -- from uploading the same solution twice). The latter keeps exactly
+            -- one representative of each identical score tuple.
             DROP VIEW IF EXISTS best_scores;
             DROP VIEW IF EXISTS pareto_scores;
             CREATE VIEW pareto_scores AS
@@ -52,26 +55,26 @@ def init_db():
                   AND (   s2.cost         < s1.cost
                        OR s2.cycles       < s1.cycles
                        OR s2.area         < s1.area
-                       OR s2.instructions < s1.instructions)
+                       OR s2.instructions < s1.instructions
+                       OR s2.id < s1.id)
             );
         """)
 
 
-def is_dominated(puzzle_id: str, nickname: str, scores: dict) -> bool:
-    """Return True if any single existing submission dominates the new scores
-    (i.e. is better-or-equal in every metric and strictly better in at least one)."""
+def is_superseded(puzzle_id: str, nickname: str, scores: dict) -> bool:
+    """Return True if the new scores add nothing for this player: some existing
+    submission is better-or-equal in every metric. That covers both a strictly
+    dominating submission and an exact duplicate (e.g. the same solution uploaded
+    twice), so neither gets stored again."""
     with get_conn() as conn:
         row = conn.execute(
             """SELECT 1 FROM submissions
                WHERE puzzle_id = ? AND nickname = ?
                  AND cost         <= ? AND cycles       <= ?
                  AND area         <= ? AND instructions <= ?
-                 AND (   cost         < ?  OR cycles       < ?
-                      OR area         < ?  OR instructions < ?)
                LIMIT 1""",
             (
                 puzzle_id, nickname,
-                scores["cost"], scores["cycles"], scores["area"], scores["instructions"],
                 scores["cost"], scores["cycles"], scores["area"], scores["instructions"],
             ),
         ).fetchone()

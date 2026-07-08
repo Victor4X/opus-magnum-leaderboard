@@ -3,7 +3,7 @@ from fastapi import FastAPI, File, Form, Header, UploadFile, HTTPException
 from fastapi.responses import HTMLResponse
 from dotenv import load_dotenv
 
-from db import init_db, insert_submission, is_dominated, get_leaderboard, get_puzzle_leaderboard
+from db import init_db, insert_submission, is_superseded, get_leaderboard, get_puzzle_leaderboard
 from parser import extract_puzzle_id, extract_puzzle_name
 from scorer import score_solution
 
@@ -71,7 +71,7 @@ async def submit(
     puzzle_name = _puzzle_names.get(puzzle_id, puzzle_id)
     base = {"puzzle_id": puzzle_id, "puzzle_name": puzzle_name, **scores, "score": score}
 
-    if is_dominated(puzzle_id, nickname, scores):
+    if is_superseded(puzzle_id, nickname, scores):
         return {**base, "accepted": False}
 
     insert_submission(
