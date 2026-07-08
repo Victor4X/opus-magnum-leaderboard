@@ -35,6 +35,21 @@
   .global-best { color: #ffd700; font-weight: bold; }
   .personal-best { color: #4fc3f7; font-weight: bold; }
   .null-val { color: #555; }
+  /* Player standings (golds per metric) */
+  #standings { max-width: 900px; margin: 0 auto 2rem; }
+  .standings-box { background: #16213e; border: 1px solid #2a2a4a; border-radius: 8px; overflow: hidden; }
+  .standings-title { background: #0f3460; padding: 0.6rem 1rem; font-size: 1rem; font-weight: bold; color: #c9a84c;
+                     display: flex; justify-content: space-between; align-items: center; }
+  .standings-title .hint { font-size: 0.72rem; color: #888; font-weight: normal; }
+  #standings table { width: 100%; border-collapse: collapse; }
+  #standings th { background: #0d2137; padding: 0.4rem 0.75rem; text-align: right; font-size: 0.72rem;
+                  color: #888; text-transform: uppercase; letter-spacing: 1px; }
+  #standings th.player-col, #standings th.rank { text-align: left; }
+  #standings td { padding: 0.45rem 0.75rem; font-size: 0.9rem; border-top: 1px solid #1e2a3a; text-align: right; }
+  #standings td.rank, #standings td.player-col { text-align: left; }
+  #standings tr:hover td { background: #1e2a3a; }
+  .gold-total { color: #ffd700; font-weight: bold; }
+  .gold-zero { color: #555; }
   #loading { text-align: center; color: #888; padding: 3rem; font-size: 1.2rem; }
   #error { text-align: center; color: #e57373; padding: 3rem; }
   #no-results { text-align: center; color: #666; padding: 2rem; display: none; }
@@ -47,6 +62,7 @@
   <span class="leg-global">&#9733; global best</span>
   <span class="leg-personal">&#9675; personal best</span>
 </p>
+<div id="standings"></div>
 <input id="search" type="search" placeholder="Filter puzzles..." oninput="filterPuzzles(this.value)">
 <div id="loading">Loading leaderboard...</div>
 <div id="error" style="display:none"></div>
@@ -73,6 +89,7 @@ async function load() {
       .map(([puzzle_id, { name, rows }]) => ({ puzzle_id, name, rows }));
 
     document.getElementById('loading').style.display = 'none';
+    renderStandings();
     renderAll();
   } catch (e) {
     document.getElementById('loading').style.display = 'none';
@@ -95,6 +112,64 @@ function esc(s) {
   return String(s).replace(/[&<>"']/g, c => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
   }[c]));
+}
+
+// Player standings: count "golds" per metric = puzzles where the player holds
+// the global best value (ties included — every player matching the min counts).
+function renderStandings() {
+  const counts = {};
+  const ensure = n => counts[n] || (counts[n] = { score: 0, cost: 0, cycles: 0, area: 0, instructions: 0, total: 0 });
+
+  for (const { rows } of allData) {
+    for (const col of METRICS) {
+      const vals = rows.map(r => r[col]).filter(v => v !== null);
+      if (!vals.length) continue;
+      const min = Math.min(...vals);
+      // Dedupe by nickname so a player with two tied pareto rows on the same
+      // puzzle only earns one gold for that metric.
+      const winners = new Set(rows.filter(r => r[col] === min).map(r => r.nickname));
+      for (const n of winners) { const c = ensure(n); c[col]++; c.total++; }
+    }
+  }
+
+  const standings = Object.entries(counts)
+    .map(([nickname, c]) => ({ nickname, ...c }))
+    .sort((a, b) => b.total - a.total || a.nickname.localeCompare(b.nickname));
+
+  const el = document.getElementById('standings');
+  if (standings.length === 0) { el.innerHTML = ''; return; }
+
+  const cell = v => v > 0 ? v : '<span class="gold-zero">0</span>';
+  const body = standings.map((s, i) => `<tr>
+    <td class="rank">${i + 1}</td>
+    <td class="player-col">${esc(s.nickname)}</td>
+    <td class="gold-total">${s.total}</td>
+    <td>${cell(s.score)}</td>
+    <td>${cell(s.cost)}</td>
+    <td>${cell(s.cycles)}</td>
+    <td>${cell(s.area)}</td>
+    <td>${cell(s.instructions)}</td>
+  </tr>`).join('');
+
+  el.innerHTML = `<div class="standings-box">
+    <div class="standings-title">
+      <span>&#9733; Player Standings</span>
+      <span class="hint">golds = global best (ties included) across all puzzles</span>
+    </div>
+    <table>
+      <thead><tr>
+        <th class="rank">#</th>
+        <th class="player-col">Player</th>
+        <th>Total</th>
+        <th>Score</th>
+        <th>Cost</th>
+        <th>Cycles</th>
+        <th>Area</th>
+        <th>Instructions</th>
+      </tr></thead>
+      <tbody>${body}</tbody>
+    </table>
+  </div>`;
 }
 
 function renderPuzzle({ puzzle_id, name, rows }) {
