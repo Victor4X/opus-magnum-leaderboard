@@ -88,6 +88,14 @@ function fmt(v) {
 
 const METRICS = ['score', 'cost', 'cycles', 'area', 'instructions'];
 
+// Escape untrusted strings (nicknames, puzzle names/ids) before interpolating
+// them into HTML, to prevent stored XSS.
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[c]));
+}
+
 function renderPuzzle({ puzzle_id, name, rows }) {
   const state = sortState[puzzle_id] || { col: 'score', asc: true };
   const { col: sortCol, asc: sortAsc } = state;
@@ -140,14 +148,14 @@ function renderPuzzle({ puzzle_id, name, rows }) {
 
     return `<tr class="${isNewPlayer ? 'new-player' : ''}">
       <td class="rank">${i + 1}</td>
-      <td>${r.nickname}</td>
+      <td>${esc(r.nickname)}</td>
       ${cells}
     </tr>`;
   }).join('');
 
-  return `<div class="puzzle-section" id="puzzle-${puzzle_id}">
+  return `<div class="puzzle-section" id="puzzle-${esc(puzzle_id)}">
     <div class="puzzle-title">
-      <span>${name} <span class="puzzle-id">${puzzle_id}</span></span>
+      <span>${esc(name)} <span class="puzzle-id">${esc(puzzle_id)}</span></span>
       <span class="puzzle-id">${playerCount} player${playerCount !== 1 ? 's' : ''} &middot; ${sorted.length} solution${sorted.length !== 1 ? 's' : ''}</span>
     </div>
     <table>
