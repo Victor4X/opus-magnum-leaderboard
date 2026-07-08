@@ -299,7 +299,7 @@ impl eframe::App for App {
                     ui.colored_label(egui::Color32::GRAY, "No uploads yet — modify a .solution file to trigger upload");
                 } else {
                     egui::Grid::new("log_grid")
-                        .num_columns(6)
+                        .num_columns(7)
                         .spacing([12.0, 4.0])
                         .striped(true)
                         .show(ui, |ui| {
@@ -308,26 +308,30 @@ impl eframe::App for App {
                             ui.strong("Cost");
                             ui.strong("Cycles");
                             ui.strong("Area");
-                            ui.strong("Instructions / Status");
+                            ui.strong("Instructions");
+                            ui.strong("Status");
                             ui.end_row();
 
                             for entry in &log {
                                 ui.label(&entry.time);
                                 ui.label(&entry.puzzle_id);
-                                if entry.status == "OK" {
+                                if entry.status == "OK" || entry.status == "no improvement" {
                                     ui.label(entry.cost.map_or("—".into(), |v| v.to_string()));
                                     ui.label(entry.cycles.map_or("—".into(), |v| v.to_string()));
                                     ui.label(entry.area.map_or("—".into(), |v| v.to_string()));
                                     ui.label(entry.instructions.map_or("—".into(), |v| v.to_string()));
-                                } else if entry.status == "no improvement" {
-                                    ui.label(entry.cost.map_or("—".into(), |v| v.to_string()));
-                                    ui.label(entry.cycles.map_or("—".into(), |v| v.to_string()));
-                                    ui.label(entry.area.map_or("—".into(), |v| v.to_string()));
-                                    ui.colored_label(egui::Color32::GRAY, "no improvement");
                                 } else {
                                     ui.label("—");
                                     ui.label("—");
                                     ui.label("—");
+                                    ui.label("—");
+                                }
+
+                                if entry.status == "OK" {
+                                    ui.colored_label(egui::Color32::GREEN, "OK");
+                                } else if entry.status == "no improvement" {
+                                    ui.colored_label(egui::Color32::GRAY, "no improvement");
+                                } else {
                                     ui.colored_label(egui::Color32::RED, &entry.status);
                                 }
                                 ui.end_row();
