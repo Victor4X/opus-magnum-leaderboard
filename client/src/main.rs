@@ -93,6 +93,7 @@ impl App {
         let log = self.log.clone();
         let server_url = self.config.server_url.clone();
         let nickname = self.config.nickname.clone();
+        let api_key = self.config.api_key.clone();
 
         self.rt.spawn(async move {
             while let Some(path) = path_rx.recv().await {
@@ -107,9 +108,9 @@ impl App {
                 let time = Local::now().format("%H:%M:%S").to_string();
 
                 // Try upload, retry once on failure
-                let result = match uploader::upload(&server_url, &nickname, &path).await {
+                let result = match uploader::upload(&server_url, &nickname, &api_key, &path).await {
                     Ok(r) => Ok(r),
-                    Err(_) => uploader::upload(&server_url, &nickname, &path).await,
+                    Err(_) => uploader::upload(&server_url, &nickname, &api_key, &path).await,
                 };
 
                 let entry = match result {
@@ -221,6 +222,12 @@ impl eframe::App for App {
 
                     ui.label("Solution directory:");
                     if ui.text_edit_singleline(&mut self.config.solution_dir).changed() {
+                        self.config_dirty = true;
+                    }
+                    ui.end_row();
+
+                    ui.label("API key:");
+                    if ui.add(egui::TextEdit::singleline(&mut self.config.api_key).password(true)).changed() {
                         self.config_dirty = true;
                     }
                     ui.end_row();

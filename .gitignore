@@ -1,5 +1,6 @@
 vendor/
 omsim/omsim
+server/.env
 __pycache__/
 *.pyc
 server/leaderboard.db

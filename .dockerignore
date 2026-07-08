@@ -5,6 +5,7 @@ client/
 .gitmodules
 server/leaderboard.db
 server/data/
+server/.env
 server/__pycache__/
 **/__pycache__/
 *.pyc

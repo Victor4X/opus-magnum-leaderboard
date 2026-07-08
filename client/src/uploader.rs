@@ -10,7 +10,7 @@ pub struct UploadResult {
     pub instructions: Option<i64>,
 }
 
-pub async fn upload(server_url: &str, nickname: &str, path: &PathBuf) -> anyhow::Result<UploadResult> {
+pub async fn upload(server_url: &str, nickname: &str, api_key: &str, path: &PathBuf) -> anyhow::Result<UploadResult> {
     let data = tokio::fs::read(path).await?;
     let filename = path
         .file_name()
@@ -27,7 +27,7 @@ pub async fn upload(server_url: &str, nickname: &str, path: &PathBuf) -> anyhow:
         .part("file", part)
         .text("nickname", nickname.to_string());
 
-    let resp = client.post(&url).multipart(form).send().await?;
+    let resp = client.post(&url).header("X-Api-Key", api_key).multipart(form).send().await?;
     if !resp.status().is_success() {
         let status = resp.status();
         let body = resp.text().await.unwrap_or_default();

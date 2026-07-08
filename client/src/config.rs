@@ -6,6 +6,8 @@ pub struct Config {
     pub server_url: String,
     pub nickname: String,
     pub solution_dir: String,
+    #[serde(default)]
+    pub api_key: String,
 }
 
 impl Default for Config {
@@ -14,6 +16,7 @@ impl Default for Config {
             server_url: "http://localhost:8000".into(),
             nickname: String::new(),
             solution_dir: detect_solution_dir().unwrap_or_default(),
+            api_key: String::new(),
         }
     }
 }

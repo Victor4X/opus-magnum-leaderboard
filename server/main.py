@@ -1,10 +1,14 @@
 import os
-from fastapi import FastAPI, File, Form, UploadFile, HTTPException
+from fastapi import FastAPI, File, Form, Header, UploadFile, HTTPException
 from fastapi.responses import HTMLResponse
+from dotenv import load_dotenv
 
 from db import init_db, insert_submission, get_player_best, get_leaderboard, get_puzzle_leaderboard
 from parser import extract_puzzle_id, extract_puzzle_name
 from scorer import score_solution
+
+load_dotenv()
+API_KEY = os.environ.get("API_KEY", "").strip()
 
 app = FastAPI(title="Opus Magnum Leaderboard")
 
@@ -36,7 +40,14 @@ def _with_names(rows: list[dict]) -> list[dict]:
 
 
 @app.post("/api/submit")
-async def submit(file: UploadFile = File(...), nickname: str = Form(...)):
+async def submit(
+    file: UploadFile = File(...),
+    nickname: str = Form(...),
+    x_api_key: str = Header(default=""),
+):
+    if API_KEY and x_api_key != API_KEY:
+        raise HTTPException(401, "Invalid or missing API key")
+
     nickname = nickname.strip()
     if not nickname:
         raise HTTPException(400, "nickname is required")
