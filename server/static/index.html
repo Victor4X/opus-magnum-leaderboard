@@ -8,7 +8,11 @@
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: 'Segoe UI', system-ui, sans-serif; background: #1a1a2e; color: #e0e0e0; padding: 1rem; }
   h1 { text-align: center; color: #c9a84c; margin: 1rem 0 0.25rem; font-size: 2rem; letter-spacing: 2px; }
-  .subtitle { text-align: center; color: #888; margin-bottom: 1.5rem; font-size: 0.9rem; }
+  .subtitle { text-align: center; color: #888; margin-bottom: 0.75rem; font-size: 0.9rem; }
+  .legend { text-align: center; margin-bottom: 1.5rem; font-size: 0.8rem; color: #888; }
+  .legend span { margin: 0 0.75rem; }
+  .leg-global { color: #ffd700; font-weight: bold; }
+  .leg-personal { color: #4fc3f7; font-weight: bold; }
   #search { display: block; margin: 0 auto 1.5rem; padding: 0.5rem 1rem; width: min(400px, 100%);
             background: #16213e; border: 1px solid #444; color: #e0e0e0; border-radius: 6px; font-size: 1rem; }
   #search::placeholder { color: #666; }
@@ -24,11 +28,11 @@
   th.sorted-desc::after { content: ' ▼'; color: #c9a84c; }
   td { padding: 0.45rem 0.75rem; font-size: 0.9rem; border-top: 1px solid #1e2a3a; }
   tr:hover td { background: #1e2a3a; }
+  /* Player separator: slightly darker top border when a new player starts */
+  tr.new-player td { border-top: 2px solid #2a3a4a; }
   .rank { color: #666; font-size: 0.8rem; width: 2rem; }
-  .rank-1 { color: #ffd700; font-weight: bold; }
-  .rank-2 { color: #c0c0c0; font-weight: bold; }
-  .rank-3 { color: #cd7f32; font-weight: bold; }
-  .best { color: #4fc3f7; font-weight: bold; }
+  .global-best { color: #ffd700; font-weight: bold; }
+  .personal-best { color: #4fc3f7; font-weight: bold; }
   .null-val { color: #555; }
   #loading { text-align: center; color: #888; padding: 3rem; font-size: 1.2rem; }
   #error { text-align: center; color: #e57373; padding: 3rem; }
@@ -37,7 +41,11 @@
 </head>
 <body>
 <h1>Opus Magnum Leaderboard</h1>
-<p class="subtitle">Best scores per player per puzzle</p>
+<p class="subtitle">Each row is a pareto-optimal solution — shown when it's best in at least one metric for that player.</p>
+<p class="legend">
+  <span class="leg-global">&#9733; global best</span>
+  <span class="leg-personal">&#9675; personal best</span>
+</p>
 <input id="search" type="search" placeholder="Filter puzzles..." oninput="filterPuzzles(this.value)">
 <div id="loading">Loading leaderboard...</div>
 <div id="error" style="display:none"></div>
@@ -45,8 +53,8 @@
 <div id="leaderboard"></div>
 
 <script>
-let allData = [];  // [{puzzle_id, rows: [{nickname, cost, cycles, area, instructions}]}]
-let sortState = {};  // puzzle_id -> {col, asc}
+let allData = [];
+let sortState = {};
 
 async function load() {
   try {
@@ -54,7 +62,6 @@ async function load() {
     if (!resp.ok) throw new Error(await resp.text());
     const rows = await resp.json();
 
-    // Group by puzzle_id
     const byPuzzle = {};
     for (const r of rows) {
       if (!byPuzzle[r.puzzle_id]) byPuzzle[r.puzzle_id] = { name: r.puzzle_name || r.puzzle_id, rows: [] };
@@ -79,9 +86,13 @@ function fmt(v) {
   return v;
 }
 
-function renderPuzzle({ puzzle_id, name, rows }, sortCol = 'cost', sortAsc = true) {
-  const sorted = [...rows];
-  sorted.sort((a, b) => {
+const METRICS = ['score', 'cost', 'cycles', 'area', 'instructions'];
+
+function renderPuzzle({ puzzle_id, name, rows }) {
+  const state = sortState[puzzle_id] || { col: 'score', asc: true };
+  const { col: sortCol, asc: sortAsc } = state;
+
+  const sorted = [...rows].sort((a, b) => {
     const av = a[sortCol], bv = b[sortCol];
     if (av === null && bv === null) return 0;
     if (av === null) return 1;
@@ -89,28 +100,46 @@ function renderPuzzle({ puzzle_id, name, rows }, sortCol = 'cost', sortAsc = tru
     return sortAsc ? av - bv : bv - av;
   });
 
-  // Find minimums per column
-  const mins = {};
-  for (const col of ['score', 'cost', 'cycles', 'area', 'instructions']) {
+  // Global minimum per metric across all rows
+  const globalMin = {};
+  for (const col of METRICS) {
     const vals = sorted.map(r => r[col]).filter(v => v !== null);
-    mins[col] = vals.length ? Math.min(...vals) : null;
+    globalMin[col] = vals.length ? Math.min(...vals) : null;
   }
 
-  const cols = ['score', 'cost', 'cycles', 'area', 'instructions'];
-  const state = sortState[puzzle_id] || { col: 'score', asc: true };
+  // Per-player minimum per metric (across that player's own rows)
+  const playerMin = {};
+  for (const r of sorted) {
+    if (!playerMin[r.nickname]) playerMin[r.nickname] = {};
+    for (const col of METRICS) {
+      if (r[col] !== null) {
+        if (playerMin[r.nickname][col] === undefined || r[col] < playerMin[r.nickname][col])
+          playerMin[r.nickname][col] = r[col];
+      }
+    }
+  }
 
-  const thClass = (col) => col === state.col ? (state.asc ? 'sorted-asc' : 'sorted-desc') : '';
+  const thClass = (col) => col === sortCol ? (sortAsc ? 'sorted-asc' : 'sorted-desc') : '';
 
+  // Count distinct players for the header
+  const playerCount = new Set(sorted.map(r => r.nickname)).size;
+
+  let lastNickname = null;
   const tbody = sorted.map((r, i) => {
-    const rank = i + 1;
-    const rankClass = rank <= 3 ? `rank-${rank}` : '';
-    const cells = cols.map(col => {
+    const isNewPlayer = r.nickname !== lastNickname;
+    lastNickname = r.nickname;
+
+    const cells = METRICS.map(col => {
       const v = r[col];
-      const isBest = v !== null && v === mins[col];
-      return `<td class="${isBest ? 'best' : ''}">${fmt(v)}</td>`;
+      if (v === null) return `<td><span class="null-val">—</span></td>`;
+      const isGlobal   = v === globalMin[col];
+      const isPersonal = v === playerMin[r.nickname][col];
+      const cls = isGlobal ? 'global-best' : (isPersonal ? 'personal-best' : '');
+      return `<td class="${cls}">${v}</td>`;
     }).join('');
-    return `<tr>
-      <td class="rank ${rankClass}">${rank}</td>
+
+    return `<tr class="${isNewPlayer ? 'new-player' : ''}">
+      <td class="rank">${i + 1}</td>
       <td>${r.nickname}</td>
       ${cells}
     </tr>`;
@@ -119,16 +148,16 @@ function renderPuzzle({ puzzle_id, name, rows }, sortCol = 'cost', sortAsc = tru
   return `<div class="puzzle-section" id="puzzle-${puzzle_id}">
     <div class="puzzle-title">
       <span>${name} <span class="puzzle-id">${puzzle_id}</span></span>
-      <span class="puzzle-id">${sorted.length} player${sorted.length !== 1 ? 's' : ''}</span>
+      <span class="puzzle-id">${playerCount} player${playerCount !== 1 ? 's' : ''} &middot; ${sorted.length} solution${sorted.length !== 1 ? 's' : ''}</span>
     </div>
     <table>
       <thead><tr>
-        <th class="rank">Rank</th>
-        <th>Nickname</th>
-        <th class="${thClass('score')}" onclick="sortPuzzle('${puzzle_id}','score')">Score</th>
-        <th class="${thClass('cost')}" onclick="sortPuzzle('${puzzle_id}','cost')">Cost</th>
-        <th class="${thClass('cycles')}" onclick="sortPuzzle('${puzzle_id}','cycles')">Cycles</th>
-        <th class="${thClass('area')}" onclick="sortPuzzle('${puzzle_id}','area')">Area</th>
+        <th class="rank">#</th>
+        <th>Player</th>
+        <th class="${thClass('score')}"    onclick="sortPuzzle('${puzzle_id}','score')">Score</th>
+        <th class="${thClass('cost')}"     onclick="sortPuzzle('${puzzle_id}','cost')">Cost</th>
+        <th class="${thClass('cycles')}"   onclick="sortPuzzle('${puzzle_id}','cycles')">Cycles</th>
+        <th class="${thClass('area')}"     onclick="sortPuzzle('${puzzle_id}','area')">Area</th>
         <th class="${thClass('instructions')}" onclick="sortPuzzle('${puzzle_id}','instructions')">Instructions</th>
       </tr></thead>
       <tbody>${tbody}</tbody>
@@ -149,10 +178,7 @@ function renderAll(filter = '') {
     noResults.style.display = '';
   } else {
     noResults.style.display = 'none';
-    lb.innerHTML = visible.map(d => {
-      const s = sortState[d.puzzle_id] || { col: 'score', asc: true };
-      return renderPuzzle(d, s.col, s.asc);
-    }).join('');
+    lb.innerHTML = visible.map(d => renderPuzzle(d)).join('');
   }
 }
 
@@ -162,12 +188,9 @@ function sortPuzzle(puzzle_id, col) {
   renderAll(document.getElementById('search').value);
 }
 
-function filterPuzzles(val) {
-  renderAll(val);
-}
+function filterPuzzles(val) { renderAll(val); }
 
 load();
-// Auto-refresh every 30 seconds
 setInterval(load, 30000);
 </script>
 </body>

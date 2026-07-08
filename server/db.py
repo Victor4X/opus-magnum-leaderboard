@@ -28,26 +28,54 @@ def init_db():
                 solution_blob BLOB
             );
 
-            CREATE VIEW IF NOT EXISTS best_scores AS
-            SELECT puzzle_id, nickname,
-                MIN(cost) as cost,
-                MIN(cycles) as cycles,
-                MIN(area) as area,
-                MIN(instructions) as instructions,
-                MIN(cost) + MIN(cycles) + MIN(area) as score
-            FROM submissions
-            GROUP BY puzzle_id, nickname;
+            -- Pareto-optimal submissions per player per puzzle.
+            -- A row is included unless some other submission from the same player
+            -- is better-or-equal in every metric and strictly better in at least one.
+            DROP VIEW IF EXISTS best_scores;
+            DROP VIEW IF EXISTS pareto_scores;
+            CREATE VIEW pareto_scores AS
+            SELECT
+                s1.id, s1.puzzle_id, s1.nickname,
+                s1.cost, s1.cycles, s1.area, s1.instructions,
+                s1.cost + s1.cycles + s1.area AS score,
+                s1.submitted_at
+            FROM submissions s1
+            WHERE NOT EXISTS (
+                SELECT 1 FROM submissions s2
+                WHERE s2.puzzle_id = s1.puzzle_id
+                  AND s2.nickname  = s1.nickname
+                  AND s2.id       != s1.id
+                  AND s2.cost         <= s1.cost
+                  AND s2.cycles       <= s1.cycles
+                  AND s2.area         <= s1.area
+                  AND s2.instructions <= s1.instructions
+                  AND (   s2.cost         < s1.cost
+                       OR s2.cycles       < s1.cycles
+                       OR s2.area         < s1.area
+                       OR s2.instructions < s1.instructions)
+            );
         """)
 
 
-def get_player_best(puzzle_id: str, nickname: str) -> dict | None:
-    """Return the current per-metric best for this player+puzzle, or None if no prior submission."""
+def is_dominated(puzzle_id: str, nickname: str, scores: dict) -> bool:
+    """Return True if any single existing submission dominates the new scores
+    (i.e. is better-or-equal in every metric and strictly better in at least one)."""
     with get_conn() as conn:
         row = conn.execute(
-            "SELECT cost, cycles, area, instructions FROM best_scores WHERE puzzle_id = ? AND nickname = ?",
-            (puzzle_id, nickname),
+            """SELECT 1 FROM submissions
+               WHERE puzzle_id = ? AND nickname = ?
+                 AND cost         <= ? AND cycles       <= ?
+                 AND area         <= ? AND instructions <= ?
+                 AND (   cost         < ?  OR cycles       < ?
+                      OR area         < ?  OR instructions < ?)
+               LIMIT 1""",
+            (
+                puzzle_id, nickname,
+                scores["cost"], scores["cycles"], scores["area"], scores["instructions"],
+                scores["cost"], scores["cycles"], scores["area"], scores["instructions"],
+            ),
         ).fetchone()
-    return dict(row) if row else None
+    return row is not None
 
 
 def insert_submission(puzzle_id: str, nickname: str, cost, cycles, area, instructions, blob: bytes):
@@ -62,7 +90,8 @@ def insert_submission(puzzle_id: str, nickname: str, cost, cycles, area, instruc
 def get_leaderboard() -> list[dict]:
     with get_conn() as conn:
         rows = conn.execute(
-            "SELECT puzzle_id, nickname, cost, cycles, area, instructions, score FROM best_scores ORDER BY puzzle_id, score"
+            """SELECT puzzle_id, nickname, cost, cycles, area, instructions, score
+               FROM pareto_scores ORDER BY puzzle_id, score"""
         ).fetchall()
     return [dict(r) for r in rows]
 
@@ -70,7 +99,8 @@ def get_leaderboard() -> list[dict]:
 def get_puzzle_leaderboard(puzzle_id: str) -> list[dict]:
     with get_conn() as conn:
         rows = conn.execute(
-            "SELECT puzzle_id, nickname, cost, cycles, area, instructions, score FROM best_scores WHERE puzzle_id = ? ORDER BY score",
+            """SELECT puzzle_id, nickname, cost, cycles, area, instructions, score
+               FROM pareto_scores WHERE puzzle_id = ? ORDER BY score""",
             (puzzle_id,),
         ).fetchall()
     return [dict(r) for r in rows]
