@@ -1,7 +1,10 @@
 import sqlite3
 import os
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "leaderboard.db")
+DB_PATH = os.environ.get(
+    "DB_PATH",
+    os.path.join(os.path.dirname(__file__), "leaderboard.db"),
+)
 
 
 def get_conn() -> sqlite3.Connection:

@@ -1,0 +1,10 @@
+vendor/
+client/
+*.md
+.git
+.gitmodules
+server/leaderboard.db
+server/data/
+server/__pycache__/
+**/__pycache__/
+*.pyc
