@@ -3,19 +3,17 @@ Run omsim to score a .solution file.
 Returns dict with keys: cost, cycles, area, instructions (all int or None).
 """
 
-import re
 import resource
 import subprocess
 import os
 import tempfile
+from pathlib import Path
+
+from parser import extract_metrics
 
 OMSIM_PATH = os.path.join(os.path.dirname(__file__), "..", "omsim", "omsim")
-PUZZLE_DIR = os.path.join(os.path.dirname(__file__), "puzzles")
-
-# Puzzle IDs come from untrusted uploaded files and are used to build a file
-# path, so restrict them to the known shape (e.g. "P008", "P030b") to prevent
-# directory traversal.
-PUZZLE_ID_RE = re.compile(r"P\d{3,4}[a-z]?")
+# Resolved once so the traversal check below compares against a canonical base.
+PUZZLE_DIR = Path(__file__).resolve().parent / "puzzles"
 
 # omsim is C code processing untrusted input; bound its resource use so a
 # malicious solution can only crash its own subprocess, not exhaust the host.
@@ -32,12 +30,30 @@ def _sandbox():
     )
 
 
+def _puzzle_file(puzzle_id: str) -> Path | None:
+    """Resolve the .puzzle path for an untrusted puzzle id.
+
+    The id is embedded in an uploaded file, so confine the result to PUZZLE_DIR:
+    resolve the candidate and verify it stays inside the directory, rejecting
+    traversal (`../`, absolute paths, ...). Returns None when the id is clean
+    but has no puzzle file on disk (a custom puzzle).
+    """
+    candidate = (PUZZLE_DIR / f"{puzzle_id}.puzzle").resolve()
+    if not candidate.is_relative_to(PUZZLE_DIR):
+        raise FileNotFoundError(f"Invalid puzzle id {puzzle_id!r}")
+    return candidate if candidate.is_file() else None
+
+
 def score_solution(puzzle_id: str, solution_bytes: bytes) -> dict:
-    if not PUZZLE_ID_RE.fullmatch(puzzle_id):
-        raise FileNotFoundError(f"No puzzle file for {puzzle_id!r}")
-    puzzle_file = os.path.join(PUZZLE_DIR, f"{puzzle_id}.puzzle")
-    if not os.path.exists(puzzle_file):
-        raise FileNotFoundError(f"No puzzle file for {puzzle_id!r}")
+    puzzle_file = _puzzle_file(puzzle_id)
+    if puzzle_file is None:
+        # Custom puzzles have no .puzzle file, so omsim can't simulate them.
+        # Fall back to the metrics the solution reports about itself — these are
+        # NOT verified by the simulator, but enough to list it on the board.
+        metrics = extract_metrics(solution_bytes)
+        if metrics is None:
+            raise RuntimeError("solution is not marked solved")
+        return metrics
 
     with tempfile.NamedTemporaryFile(suffix=".solution", delete=False) as f:
         f.write(solution_bytes)
@@ -47,7 +63,7 @@ def score_solution(puzzle_id: str, solution_bytes: bytes) -> dict:
         result = subprocess.run(
             [
                 OMSIM_PATH,
-                "--puzzle-file", puzzle_file,
+                "--puzzle-file", str(puzzle_file),
                 "--metric", "cost",
                 "--metric", "cycles",
                 "--metric", "area",

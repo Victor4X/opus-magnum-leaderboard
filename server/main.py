@@ -36,6 +36,9 @@ def startup():
 def _with_names(rows: list[dict]) -> list[dict]:
     for row in rows:
         row["puzzle_name"] = _puzzle_names.get(row["puzzle_id"], row["puzzle_id"])
+        # A puzzle the server has a definition for was scored by omsim (verified);
+        # custom puzzles fall back to the solution's self-reported (unverified) metrics.
+        row["verified"] = row["puzzle_id"] in _puzzle_names
     return rows
 
 
@@ -69,7 +72,9 @@ async def submit(
     cost, cycles, area = scores["cost"], scores["cycles"], scores["area"]
     score = (cost + cycles + area) if None not in (cost, cycles, area) else None
     puzzle_name = _puzzle_names.get(puzzle_id, puzzle_id)
-    base = {"puzzle_id": puzzle_id, "puzzle_name": puzzle_name, **scores, "score": score}
+    verified = puzzle_id in _puzzle_names
+    base = {"puzzle_id": puzzle_id, "puzzle_name": puzzle_name, **scores,
+            "score": score, "verified": verified}
 
     if is_superseded(puzzle_id, nickname, scores):
         return {**base, "accepted": False}

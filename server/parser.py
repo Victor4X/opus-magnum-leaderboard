@@ -52,3 +52,26 @@ def extract_puzzle_name(data: bytes) -> str:
         raise ValueError("Puzzle file too short")
     name, _ = _read_string(data, 4)
     return name
+
+
+def extract_metrics(data: bytes) -> dict | None:
+    """Return the solution's self-reported {cost, cycles, area, instructions}.
+
+    These come straight from the solution header and are NOT verified by omsim;
+    used as a fallback for custom puzzles that have no .puzzle file to simulate.
+    Returns None if the solution is not marked solved (no metrics recorded).
+    """
+    if len(data) < 5:
+        raise ValueError("Solution file too short")
+    version = struct.unpack_from("<I", data, 0)[0]
+    if version != 7:
+        raise ValueError(f"Unexpected solution version: {version}")
+    _, offset = _read_string(data, 4)       # puzzle id
+    _, offset = _read_string(data, offset)  # solution name
+    (solved,) = struct.unpack_from("<I", data, offset)
+    offset += 4
+    if not solved:
+        return None
+    # Eight uint32s: marker 0, cycles, marker 1, cost, marker 2, area, marker 3, instructions.
+    _, cycles, _, cost, _, area, _, instructions = struct.unpack_from("<8I", data, offset)
+    return {"cost": cost, "cycles": cycles, "area": area, "instructions": instructions}

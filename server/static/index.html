@@ -20,6 +20,7 @@
   .puzzle-title { background: #0f3460; padding: 0.6rem 1rem; font-size: 1rem; font-weight: bold; color: #c9a84c;
                   display: flex; justify-content: space-between; align-items: center; }
   .puzzle-id { font-size: 0.75rem; color: #888; font-weight: normal; }
+  .unverified-badge { font-size: 0.7rem; font-weight: normal; color: #8a6d00; background: #fff3cd; border: 1px solid #ffe69c; border-radius: 3px; padding: 1px 5px; margin-left: 4px; cursor: help; vertical-align: middle; }
   table { width: 100%; border-collapse: collapse; }
   th { background: #0d2137; padding: 0.4rem 0.75rem; text-align: left; font-size: 0.75rem;
        color: #888; text-transform: uppercase; letter-spacing: 1px; cursor: pointer; user-select: none; }
@@ -129,6 +130,10 @@ function renderPuzzle({ puzzle_id, name, rows }) {
 
   const thClass = (col) => col === sortCol ? (sortAsc ? 'sorted-asc' : 'sorted-desc') : '';
 
+  // Custom puzzles have no server-side definition, so their scores are taken
+  // from the solution file itself rather than checked by the simulator.
+  const unverified = rows.length > 0 && !rows.every(r => r.verified);
+
   // Count distinct players for the header
   const playerCount = new Set(sorted.map(r => r.nickname)).size;
 
@@ -155,7 +160,7 @@ function renderPuzzle({ puzzle_id, name, rows }) {
 
   return `<div class="puzzle-section" id="puzzle-${esc(puzzle_id)}">
     <div class="puzzle-title">
-      <span>${esc(name)} <span class="puzzle-id">${esc(puzzle_id)}</span></span>
+      <span>${esc(name)} <span class="puzzle-id">${esc(puzzle_id)}</span>${unverified ? ' <span class="unverified-badge" title="Custom puzzle — scores are self-reported by the solution file, not verified by the simulator.">unverified</span>' : ''}</span>
       <span class="puzzle-id">${playerCount} player${playerCount !== 1 ? 's' : ''} &middot; ${sorted.length} solution${sorted.length !== 1 ? 's' : ''}</span>
     </div>
     <table>
