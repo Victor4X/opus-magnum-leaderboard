@@ -49,3 +49,7 @@ The `.solution`/`.puzzle` binary parser is adapted from
 [Opus Magnum](https://store.steampowered.com/app/558990/Opus_Magnum/) is a game
 by [Zachtronics](https://www.zachtronics.com/). This project is an unofficial,
 fan-made tool and is not affiliated with Zachtronics.
+
+## License
+
+[MIT](LICENSE). The bundled parser derives from omsp, which is Apache-2.0 (see Credits).
