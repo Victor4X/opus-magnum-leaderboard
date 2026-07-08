@@ -38,3 +38,14 @@ Enter the server URL and your nickname, and the client handles the rest. Your so
 - Python 3.11+ with [uv](https://docs.astral.sh/uv/)
 - Rust toolchain (`cargo`)
 - omsim built: `cd omsim && make`
+
+## Credits
+
+Solutions are scored by [omsim](https://github.com/ianh/omsim).
+
+The `.solution`/`.puzzle` binary parser is adapted from
+[omsp](https://github.com/F43nd1r/omsp) by F43nd1r, licensed under Apache-2.0.
+
+[Opus Magnum](https://store.steampowered.com/app/558990/Opus_Magnum/) is a game
+by [Zachtronics](https://www.zachtronics.com/). This project is an unofficial,
+fan-made tool and is not affiliated with Zachtronics.

@@ -1,6 +1,8 @@
 vendor/
 omsim/omsim
 server/.env
+om-leaderboard-data/
+om-leaderboard.tar.gz
 __pycache__/
 *.pyc
 server/leaderboard.db
