@@ -38,6 +38,9 @@ struct App {
     // Keep watcher alive
     _watcher: Option<notify::RecommendedWatcher>,
 
+    // "Upload all" state: None = idle, Some(n) = n files queued
+    upload_all_queued: Option<usize>,
+
     // Tokio runtime
     rt: tokio::runtime::Handle,
 }
@@ -71,6 +74,7 @@ impl App {
             log,
             upload_tx: None,
             _watcher: None,
+            upload_all_queued: None,
             rt,
         };
         app.start_watching();
@@ -149,6 +153,28 @@ impl App {
         }
     }
 
+    fn upload_all(&mut self) {
+        let Some(tx) = self.upload_tx.clone() else { return };
+        let dir = PathBuf::from(&self.config.solution_dir);
+
+        let entries: Vec<PathBuf> = std::fs::read_dir(&dir)
+            .into_iter()
+            .flatten()
+            .flatten()
+            .map(|e| e.path())
+            .filter(|p| p.extension().map_or(false, |e| e == "solution"))
+            .collect();
+
+        let count = entries.len();
+        self.upload_all_queued = Some(count);
+
+        self.rt.spawn(async move {
+            for path in entries {
+                let _ = tx.send(path).await;
+            }
+        });
+    }
+
     fn ping_server(&self) {
         let url = self.config.server_url.clone();
         let status = self.connection_status.clone();
@@ -166,6 +192,13 @@ impl App {
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         ctx.request_repaint_after(std::time::Duration::from_secs(2));
+
+        // Clear "queued" banner once all uploads have landed in the log
+        if let Some(n) = self.upload_all_queued {
+            if self.log.lock().unwrap().len() >= n.min(20) {
+                self.upload_all_queued = None;
+            }
+        }
 
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("Opus Magnum Leaderboard Client");
@@ -228,6 +261,19 @@ impl eframe::App for App {
                     if let Some(err) = &self.watch_error {
                         ui.label(err);
                     }
+                }
+            });
+
+            ui.add_space(8.0);
+
+            // --- Upload All ---
+            ui.horizontal(|ui| {
+                let can_upload = self.watching && !self.config.nickname.is_empty();
+                if ui.add_enabled(can_upload, egui::Button::new("Upload All Solutions")).clicked() {
+                    self.upload_all();
+                }
+                if let Some(n) = self.upload_all_queued {
+                    ui.colored_label(egui::Color32::YELLOW, format!("Queued {n} solutions..."));
                 }
             });
 
