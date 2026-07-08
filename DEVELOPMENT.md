@@ -176,6 +176,62 @@ cargo build --release --target x86_64-pc-windows-gnu
 
 ---
 
+## Deployment
+
+### Building the Docker image
+
+```bash
+docker build -t om-leaderboard .
+```
+
+### Running locally with Docker
+
+```bash
+./start-docker.sh
+```
+
+This starts the container on port 8000 with a named Docker volume (`om-leaderboard-data`) for database persistence and `--restart unless-stopped` so it survives reboots.
+
+### Deploying to a remote server
+
+**Option A — transfer the image directly** (no registry needed):
+
+```bash
+# On your machine
+docker build -t om-leaderboard .
+docker save om-leaderboard | gzip > om-leaderboard.tar.gz
+scp om-leaderboard.tar.gz user@your-server:~
+
+# On the server
+docker load < om-leaderboard.tar.gz
+./start-docker.sh   # or copy and run the script manually
+```
+
+**Option B — push to a registry:**
+
+```bash
+docker tag om-leaderboard ghcr.io/youruser/om-leaderboard:latest
+docker push ghcr.io/youruser/om-leaderboard:latest
+
+# On the server
+docker pull ghcr.io/youruser/om-leaderboard:latest
+docker tag ghcr.io/youruser/om-leaderboard:latest om-leaderboard
+./start-docker.sh
+```
+
+### Database
+
+The database lives in the `om-leaderboard-data` Docker volume. To back it up:
+
+```bash
+docker run --rm -v om-leaderboard-data:/data -v $(pwd):/out alpine \
+  cp /data/leaderboard.db /out/leaderboard.db.bak
+```
+
+To restore, stop the container, copy the file back into the volume, and start it again.
+
+---
+
 ## Testing end-to-end
 
 ```bash
