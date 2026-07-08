@@ -5,9 +5,13 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   build:
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: ubuntu-latest
@@ -64,3 +68,46 @@ jobs:
           name: ${{ matrix.artifact }}
           path: client/target/${{ matrix.target }}/release/${{ matrix.binary }}
           retention-days: 90
+
+  # Publish the freshly built binaries as a single rolling "latest" release so
+  # they are publicly downloadable. Re-created on every push to main.
+  release:
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Assemble release files
+        run: |
+          mkdir release
+          # Each artifact is a directory named after the platform (e.g.
+          # om-leaderboard-client-linux-x86_64) containing one binary. Rename the
+          # binary to that platform name so all three coexist as release assets.
+          for dir in artifacts/*/; do
+            name=$(basename "$dir")
+            file=$(find "$dir" -type f | head -n1)
+            case "$file" in
+              *.exe) cp "$file" "release/${name}.exe" ;;
+              *)     cp "$file" "release/${name}" ;;
+            esac
+          done
+          ls -l release
+
+      - name: Publish rolling "latest" release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Delete the previous release + tag so "latest" always points at this
+          # commit's build, then recreate it with the fresh assets.
+          gh release delete latest --yes --cleanup-tag --repo "$GITHUB_REPOSITORY" || true
+          gh release create latest release/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "Latest build" \
+            --notes "Automated build of ${GITHUB_SHA:0:7}."
