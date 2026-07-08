@@ -236,6 +236,11 @@ impl eframe::App for App {
                         self.ping_server();
                     }
 
+                    if ui.button("Open Leaderboard").clicked() {
+                        let url = format!("{}/", self.config.server_url.trim_end_matches('/'));
+                        let _ = open::that(url);
+                    }
+
                     if self.config_dirty {
                         ui.colored_label(egui::Color32::YELLOW, "Unsaved changes");
                     }
