@@ -35,6 +35,7 @@ def init_db():
             -- from uploading the same solution twice). The latter keeps exactly
             -- one representative of each identical score tuple.
             DROP VIEW IF EXISTS best_scores;
+            DROP VIEW IF EXISTS category_best;
             DROP VIEW IF EXISTS pareto_scores;
             CREATE VIEW pareto_scores AS
             SELECT
@@ -58,6 +59,22 @@ def init_db():
                        OR s2.instructions < s1.instructions
                        OR s2.id < s1.id)
             );
+
+            -- Category champions per player per puzzle: a submission is shown
+            -- only when it holds that player's personal best (minimum) in at
+            -- least one category — score, cost, cycles, area or instructions.
+            -- Built on pareto_scores so it can never resurface a dominated row.
+            -- Interior pareto trade-offs (best in no single category) are hidden.
+            CREATE VIEW category_best AS
+            SELECT p.id, p.puzzle_id, p.nickname,
+                   p.cost, p.cycles, p.area, p.instructions, p.score,
+                   p.submitted_at
+            FROM pareto_scores p
+            WHERE p.score        = (SELECT MIN(q.score)        FROM pareto_scores q WHERE q.puzzle_id = p.puzzle_id AND q.nickname = p.nickname)
+               OR p.cost         = (SELECT MIN(q.cost)         FROM pareto_scores q WHERE q.puzzle_id = p.puzzle_id AND q.nickname = p.nickname)
+               OR p.cycles       = (SELECT MIN(q.cycles)       FROM pareto_scores q WHERE q.puzzle_id = p.puzzle_id AND q.nickname = p.nickname)
+               OR p.area         = (SELECT MIN(q.area)         FROM pareto_scores q WHERE q.puzzle_id = p.puzzle_id AND q.nickname = p.nickname)
+               OR p.instructions = (SELECT MIN(q.instructions) FROM pareto_scores q WHERE q.puzzle_id = p.puzzle_id AND q.nickname = p.nickname);
         """)
 
 
@@ -94,7 +111,7 @@ def get_leaderboard() -> list[dict]:
     with get_conn() as conn:
         rows = conn.execute(
             """SELECT puzzle_id, nickname, cost, cycles, area, instructions, score
-               FROM pareto_scores ORDER BY puzzle_id, score"""
+               FROM category_best ORDER BY puzzle_id, score"""
         ).fetchall()
     return [dict(r) for r in rows]
 
@@ -103,7 +120,7 @@ def get_puzzle_leaderboard(puzzle_id: str) -> list[dict]:
     with get_conn() as conn:
         rows = conn.execute(
             """SELECT puzzle_id, nickname, cost, cycles, area, instructions, score
-               FROM pareto_scores WHERE puzzle_id = ? ORDER BY score""",
+               FROM category_best WHERE puzzle_id = ? ORDER BY score""",
             (puzzle_id,),
         ).fetchall()
     return [dict(r) for r in rows]
