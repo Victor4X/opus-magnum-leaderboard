@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Opus Magnum Leaderboard</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: #1a1a2e; color: #e0e0e0; padding: 1rem; }
+  h1 { text-align: center; color: #c9a84c; margin: 1rem 0 0.25rem; font-size: 2rem; letter-spacing: 2px; }
+  .subtitle { text-align: center; color: #888; margin-bottom: 1.5rem; font-size: 0.9rem; }
+  #search { display: block; margin: 0 auto 1.5rem; padding: 0.5rem 1rem; width: min(400px, 100%);
+            background: #16213e; border: 1px solid #444; color: #e0e0e0; border-radius: 6px; font-size: 1rem; }
+  #search::placeholder { color: #666; }
+  .puzzle-section { background: #16213e; border: 1px solid #2a2a4a; border-radius: 8px; margin-bottom: 1.5rem; overflow: hidden; }
+  .puzzle-title { background: #0f3460; padding: 0.6rem 1rem; font-size: 1rem; font-weight: bold; color: #c9a84c;
+                  display: flex; justify-content: space-between; align-items: center; }
+  .puzzle-id { font-size: 0.75rem; color: #888; font-weight: normal; }
+  table { width: 100%; border-collapse: collapse; }
+  th { background: #0d2137; padding: 0.4rem 0.75rem; text-align: left; font-size: 0.75rem;
+       color: #888; text-transform: uppercase; letter-spacing: 1px; cursor: pointer; user-select: none; }
+  th:hover { color: #c9a84c; }
+  th.sorted-asc::after { content: ' ▲'; color: #c9a84c; }
+  th.sorted-desc::after { content: ' ▼'; color: #c9a84c; }
+  td { padding: 0.45rem 0.75rem; font-size: 0.9rem; border-top: 1px solid #1e2a3a; }
+  tr:hover td { background: #1e2a3a; }
+  .rank { color: #666; font-size: 0.8rem; width: 2rem; }
+  .rank-1 { color: #ffd700; font-weight: bold; }
+  .rank-2 { color: #c0c0c0; font-weight: bold; }
+  .rank-3 { color: #cd7f32; font-weight: bold; }
+  .best { color: #4fc3f7; font-weight: bold; }
+  .null-val { color: #555; }
+  #loading { text-align: center; color: #888; padding: 3rem; font-size: 1.2rem; }
+  #error { text-align: center; color: #e57373; padding: 3rem; }
+  #no-results { text-align: center; color: #666; padding: 2rem; display: none; }
+</style>
+</head>
+<body>
+<h1>Opus Magnum Leaderboard</h1>
+<p class="subtitle">Best scores per player per puzzle</p>
+<input id="search" type="search" placeholder="Filter puzzles..." oninput="filterPuzzles(this.value)">
+<div id="loading">Loading leaderboard...</div>
+<div id="error" style="display:none"></div>
+<div id="no-results">No puzzles match your search.</div>
+<div id="leaderboard"></div>
+
+<script>
+let allData = [];  // [{puzzle_id, rows: [{nickname, cost, cycles, area, instructions}]}]
+let sortState = {};  // puzzle_id -> {col, asc}
+
+async function load() {
+  try {
+    const resp = await fetch('/api/leaderboard');
+    if (!resp.ok) throw new Error(await resp.text());
+    const rows = await resp.json();
+
+    // Group by puzzle_id
+    const byPuzzle = {};
+    for (const r of rows) {
+      if (!byPuzzle[r.puzzle_id]) byPuzzle[r.puzzle_id] = [];
+      byPuzzle[r.puzzle_id].push(r);
+    }
+    allData = Object.entries(byPuzzle)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([puzzle_id, rows]) => ({ puzzle_id, rows }));
+
+    document.getElementById('loading').style.display = 'none';
+    renderAll();
+  } catch (e) {
+    document.getElementById('loading').style.display = 'none';
+    const el = document.getElementById('error');
+    el.style.display = '';
+    el.textContent = 'Error loading leaderboard: ' + e.message;
+  }
+}
+
+function fmt(v) {
+  if (v === null || v === undefined) return '<span class="null-val">—</span>';
+  return v;
+}
+
+function renderPuzzle({ puzzle_id, rows }, sortCol = 'cost', sortAsc = true) {
+  const sorted = [...rows];
+  sorted.sort((a, b) => {
+    const av = a[sortCol], bv = b[sortCol];
+    if (av === null && bv === null) return 0;
+    if (av === null) return 1;
+    if (bv === null) return -1;
+    return sortAsc ? av - bv : bv - av;
+  });
+
+  // Find minimums per column
+  const mins = {};
+  for (const col of ['score', 'cost', 'cycles', 'area', 'instructions']) {
+    const vals = sorted.map(r => r[col]).filter(v => v !== null);
+    mins[col] = vals.length ? Math.min(...vals) : null;
+  }
+
+  const cols = ['score', 'cost', 'cycles', 'area', 'instructions'];
+  const state = sortState[puzzle_id] || { col: 'score', asc: true };
+
+  const thClass = (col) => col === state.col ? (state.asc ? 'sorted-asc' : 'sorted-desc') : '';
+
+  const tbody = sorted.map((r, i) => {
+    const rank = i + 1;
+    const rankClass = rank <= 3 ? `rank-${rank}` : '';
+    const cells = cols.map(col => {
+      const v = r[col];
+      const isBest = v !== null && v === mins[col];
+      return `<td class="${isBest ? 'best' : ''}">${fmt(v)}</td>`;
+    }).join('');
+    return `<tr>
+      <td class="rank ${rankClass}">${rank}</td>
+      <td>${r.nickname}</td>
+      ${cells}
+    </tr>`;
+  }).join('');
+
+  return `<div class="puzzle-section" id="puzzle-${puzzle_id}">
+    <div class="puzzle-title">
+      <span>${puzzle_id}</span>
+      <span class="puzzle-id">${sorted.length} player${sorted.length !== 1 ? 's' : ''}</span>
+    </div>
+    <table>
+      <thead><tr>
+        <th class="rank">Rank</th>
+        <th>Nickname</th>
+        <th class="${thClass('score')}" onclick="sortPuzzle('${puzzle_id}','score')">Score</th>
+        <th class="${thClass('cost')}" onclick="sortPuzzle('${puzzle_id}','cost')">Cost</th>
+        <th class="${thClass('cycles')}" onclick="sortPuzzle('${puzzle_id}','cycles')">Cycles</th>
+        <th class="${thClass('area')}" onclick="sortPuzzle('${puzzle_id}','area')">Area</th>
+        <th class="${thClass('instructions')}" onclick="sortPuzzle('${puzzle_id}','instructions')">Instructions</th>
+      </tr></thead>
+      <tbody>${tbody}</tbody>
+    </table>
+  </div>`;
+}
+
+function renderAll(filter = '') {
+  const lb = document.getElementById('leaderboard');
+  const noResults = document.getElementById('no-results');
+  const lower = filter.toLowerCase();
+  const visible = filter
+    ? allData.filter(d => d.puzzle_id.toLowerCase().includes(lower))
+    : allData;
+
+  if (visible.length === 0 && allData.length > 0) {
+    lb.innerHTML = '';
+    noResults.style.display = '';
+  } else {
+    noResults.style.display = 'none';
+    lb.innerHTML = visible.map(d => {
+      const s = sortState[d.puzzle_id] || { col: 'score', asc: true };
+      return renderPuzzle(d, s.col, s.asc);
+    }).join('');
+  }
+}
+
+function sortPuzzle(puzzle_id, col) {
+  const cur = sortState[puzzle_id] || { col: 'score', asc: true };
+  sortState[puzzle_id] = { col, asc: cur.col === col ? !cur.asc : true };
+  renderAll(document.getElementById('search').value);
+}
+
+function filterPuzzles(val) {
+  renderAll(val);
+}
+
+load();
+// Auto-refresh every 30 seconds
+setInterval(load, 30000);
+</script>
+</body>
+</html>

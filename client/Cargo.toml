@@ -1,0 +1,17 @@
+[package]
+name = "om-leaderboard-client"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+eframe = { version = "0.27", features = ["default"] }
+egui = "0.27"
+notify = "6"
+reqwest = { version = "0.12", features = ["multipart", "blocking", "json"] }
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+dirs = "5"
+chrono = { version = "0.4", features = ["serde"] }
+anyhow = "1"

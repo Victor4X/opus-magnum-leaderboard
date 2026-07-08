@@ -1,0 +1,7 @@
+vendor/
+omsim/omsim
+__pycache__/
+*.pyc
+server/leaderboard.db
+client/target/
+*.solution
